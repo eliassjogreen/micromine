@@ -9,7 +9,7 @@ export async function checkParallel(
   const threadRange = Math.floor(totalRange / threads);
   const promises: Promise<number[]>[] = [];
   const workers = new Array(threads).fill(undefined).map((_) =>
-    parry(checkRange)
+    parry(check)
   );
 
   for (let i = 0; i < threads; i++) {
@@ -30,7 +30,7 @@ export async function checkParallel(
   return result;
 }
 
-export async function checkRange(
+export async function check(
   start: number,
   stop: number,
 ): Promise<number[]> {
@@ -40,7 +40,7 @@ export async function checkRange(
 
   function next(from: number, limit: number): number {
     for (
-      let i = 6 * Math.ceil(from + 2 / 6);
+      let i = 6 * Math.ceil(Math.floor(from + 2) / 6);
       i < limit;
       i += 6
     ) {

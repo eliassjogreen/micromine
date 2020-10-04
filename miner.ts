@@ -5,7 +5,7 @@ import {
   TaskStoreResultMessage,
 } from "./microgrid.ts";
 import { parry } from "./deps.ts";
-import { checkRange } from "./twin_prime.ts";
+import { check } from "./twin_prime.ts";
 
 export async function work(
   thread: number,
@@ -20,7 +20,7 @@ export async function work(
     }][${uid}] Got new Task! Checking sequence: ${start}..${stop}`,
   );
   const startTime = performance.now();
-  const result = await checkRange(start, stop);
+  const result = await check(start, stop);
   const endTime = performance.now();
   console.log(
     `[${
@@ -46,7 +46,7 @@ export class Miner {
   public async mine() {
     const workers = new Array(this.threads).fill(undefined).map((_) => {
       const worker = parry(work);
-      worker.use("checkRange", checkRange);
+      worker.use("check", check);
       return worker;
     });
     const promises: Array<Promise<[number, number, number, number[]]>> = [];
