@@ -139,13 +139,13 @@ export class Microgrid {
     if (sessionId === undefined || token === undefined) {
       this.getSessionId().then((id) => {
         if (id === undefined) {
-          throw "Could not get session id";
+          throw new Error("Could not get session id");
         }
 
         this.#sessionId = id;
         this.getToken(id).then((tok) => {
           if (tok === undefined) {
-            throw "Could not get token";
+            throw new Error("Could not get token");
           }
 
           this.#token = tok;

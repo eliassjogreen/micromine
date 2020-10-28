@@ -1,21 +1,17 @@
+import { exists } from "./deps.ts";
+
 import { LoginMessage, Microgrid } from "./microgrid.ts";
-
-import { BufReader, exists } from "./deps.ts";
 import { Miner } from "./miner.ts";
-
-const decoder = new TextDecoder();
-
-async function readLine(stdin: Deno.Reader = Deno.stdin) {
-  const reader = BufReader.create(stdin);
-  const line = await reader.readLine();
-  if (line === null) {
-    return "";
-  }
-
-  return decoder.decode(line.line);
-}
+import { error, log } from "./log.ts";
 
 let grid;
+
+log("           _                          _");
+log("          (_)                        (_)");
+log(" _ __ ___  _  ___ _ __ ___  _ __ ___  _ _ __   ___");
+log("| '_ ` _ \\| |/ __| '__/ _ \\| '_ ` _ \\| | '_ \\ / _ \\");
+log("| | | | | | | (__| | | (_) | | | | | | | | | |  __/");
+log("|_| |_| |_|_|\\___|_|  \\___/|_| |_| |_|_|_| |_|\\___|");
 
 if (await exists("./session.json")) {
   console.log("Found session.json");
@@ -27,45 +23,47 @@ if (await exists("./session.json")) {
 
   grid = new Microgrid(session.sessionId, session.token);
 } else {
-  console.log("Didn't find session.json");
+  log("Didn't find session.json");
 
   grid = new Microgrid();
   await grid.ready;
 
-  console.log("Initialized new session");
-  console.log("Session id : " + grid.sessionId);
-  console.log("Token      : " + grid.token);
+  log("Initialized new session");
+  log("Session id : " + grid.sessionId);
+  log("Token      : " + grid.token);
 
-  console.log("Enter username: ");
-  const username = await readLine();
-  console.log("Enter password: ");
-  const password = await readLine();
-
-  console.log("Downloading captcha");
-  const captchaImage = await grid.captcha();
-  if (!captchaImage) {
-    throw "Could not get captcha";
+  const login = prompt("Enter username: ");
+  if (!login) {
+    error("Expected username");
   }
 
-  console.log("Downloaded captcha, writing to captcha.png");
+  const password = prompt("Enter password: ");
+  if (!password) {
+    error("Expected password");
+  }
+
+  log("Downloading captcha");
+  const captchaImage = await grid.captcha();
+  if (!captchaImage) {
+    error("Could not get captcha");
+  }
+
+  log("Downloaded captcha, writing to captcha.png");
   await Deno.writeFile("captcha.png", captchaImage);
-  console.log("Enter captcha: ");
-  const captchaCode = await readLine();
+  const captcha = prompt("Enter captcha: ");
+  if (!captcha) {
+    error("Expected captcha");
+  }
 
-  console.log("Logging in...");
-  const loginResult = await grid.login({
-    login: username,
-    password: password,
-    captcha: captchaCode,
-  });
+  log("Logging in...");
+  const loginResult = await grid.login({ login, password, captcha });
 
-  console.log(`Login result: ${LoginMessage[loginResult]}`);
+  log(`Login result: ${LoginMessage[loginResult]}`);
 
   if (loginResult !== LoginMessage.LoginSuccessful) {
-    console.log("Login failed, exiting...");
-    Deno.exit(1);
+    error("Login failed, exiting...");
   } else {
-    console.log("Login successful, saving session to session.json");
+    log("Login successful, saving session to session.json");
     await Deno.writeTextFile(
       "./session.json",
       JSON.stringify({

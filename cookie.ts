@@ -18,6 +18,6 @@ export class Cookie {
       return new Cookie(name, parts.pop()!.split(";").shift()!);
     }
 
-    throw "Could not parse cookie";
+    throw new Error("Could not parse cookie");
   }
 }
