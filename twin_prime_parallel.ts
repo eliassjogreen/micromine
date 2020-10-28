@@ -4,7 +4,7 @@ import { check } from "./twin_prime.ts";
 export async function checkParallel(
   start: number,
   stop: number,
-  threads: number,
+  threads: number = Deno.systemCpuInfo().cores ?? 4,
 ): Promise<number[]> {
   const totalRange = stop - start;
   const threadRange = Math.floor(totalRange / threads);

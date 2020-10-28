@@ -39,7 +39,7 @@ export class Miner {
 
   #microgrid: Microgrid;
 
-  constructor(microgrid: Microgrid, threads = 16, sieve = 1e4) {
+  constructor(microgrid: Microgrid, threads = Deno.systemCpuInfo().cores ?? 4, sieve = 1e4) {
     this.threads = threads;
     this.sieve = sieve;
     this.#microgrid = microgrid;
