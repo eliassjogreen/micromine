@@ -52,6 +52,7 @@ export interface ResultOptions {
   workunit_result_uid: number;
   result:
     | number[]
+    | bigint[]
     | {
       results: number[];
       validation_hash: number;

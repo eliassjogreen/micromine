@@ -8,7 +8,7 @@ import {
 } from "./microgrid.ts";
 import { error, log } from "./log.ts";
 
-declare let generate: ((start: bigint, stop: bigint) => string) | undefined;
+declare let generate: ((start: bigint, stop: bigint) => bigint[]) | undefined;
 
 export async function work(
   thread: number,
@@ -16,7 +16,7 @@ export async function work(
   resultId: number,
   start: number,
   stop: number,
-): Promise<[number, number, number, string]> {
+): Promise<[number, number, number, bigint[]]> {
   if (generate === undefined) {
     log(
       `Importing twinprime plugin...`,
@@ -25,7 +25,7 @@ export async function work(
     );
     try {
       generate =
-        (await import("https://deno.land/x/twinprime@0.1.0/mod.ts")).generate;
+        (await import("https://deno.land/x/twinprime@0.1.1/mod.ts")).generate;
     } catch (e) {
       console.log(e);
     }
@@ -71,7 +71,7 @@ export class Miner {
       return worker;
     });
 
-    const promises: Array<Promise<[number, number, number, string]>> = [];
+    const promises: Array<Promise<[number, number, number, bigint[]]>> = [];
     log(`Starting mining using ${this.threads} workers`);
 
     for (let thread = 0; thread < this.threads; thread++) {
@@ -126,7 +126,7 @@ export class Miner {
   private async fetchTask(): Promise<Task> {
     const taskResponse = await this.#microgrid.getNewTask({ project: 1 });
     if (taskResponse.message !== GetNewTaskMessage.Successful) {
-      error(`Could not fetch new task, exiting...`);
+      error(`Could not fetch new task, exiting... (${GetNewTaskMessage[taskResponse.message]})`);
     }
 
     return taskResponse.task!;
@@ -135,7 +135,7 @@ export class Miner {
   private async storeTask(
     workunit_result_uid: number,
     uid: number,
-    result: string,
+    result: bigint[],
   ) {
     const storeResult = await this.#microgrid.taskStoreResult({
       version: 2,
