@@ -115,7 +115,6 @@ export enum TaskStoreResultMessage {
 
 export class Microgrid {
   public readonly baseUrl: string;
-  public readonly corsProxy: string;
   public readonly ready: Promise<void>;
 
   public get sessionId(): string {
@@ -132,11 +131,9 @@ export class Microgrid {
   constructor(
     sessionId?: string,
     token?: string,
-    baseUrl: string = "https://microgrid.arikado.ru/",
-    corsProxy: string = "https://cors-anywhere.herokuapp.com/"
+    baseUrl: string = "https://microgrid.arikado.ru/"
   ) {
     this.baseUrl = baseUrl;
-    this.corsProxy = corsProxy;
     let ready = deferred();
     this.ready = ready as Promise<void>;
 
