@@ -1,4 +1,4 @@
-import { parry } from "./deps.ts";
+import { parry, readKeypress } from "./deps.ts";
 
 import {
   GetNewTaskMessage,
@@ -6,8 +6,9 @@ import {
   Task,
   TaskStoreResultMessage,
 } from "./microgrid.ts";
-import { check, next, prime, sieve } from "./twin_prime.ts";
 import { error, log } from "./log.ts";
+
+declare let generate: ((start: bigint, stop: bigint) => string) | undefined;
 
 export async function work(
   thread: number,
@@ -15,14 +16,28 @@ export async function work(
   resultId: number,
   start: number,
   stop: number,
-): Promise<[number, number, number, number[]]> {
+): Promise<[number, number, number, string]> {
+  if (generate === undefined) {
+    log(
+      `Importing twinprime plugin...`,
+      undefined,
+      thread,
+    );
+    try {
+      generate =
+        (await import("https://deno.land/x/twinprime@0.1.0/mod.ts")).generate;
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
   log(
-    `Checking sequence: ${start}..${stop}`,
+    `Generating sequence: ${start}..${stop}`,
     [uid],
     thread,
   );
   const startTime = performance.now();
-  const result = await check(start, stop);
+  const result = generate!(BigInt(start), BigInt(stop));
   const endTime = performance.now();
   log(
     `Finished sequence: ${start}..${stop} in ${
@@ -37,47 +52,33 @@ export async function work(
 
 export class Miner {
   public readonly threads;
-  public readonly sieve;
 
   #microgrid: Microgrid;
 
   constructor(
     microgrid: Microgrid,
     threads = Deno.systemCpuInfo().cores ?? 4,
-    sieve = 1e4,
   ) {
     this.threads = threads;
-    this.sieve = sieve;
     this.#microgrid = microgrid;
   }
 
   public async mine() {
-    log(`Generating first ${this.sieve} primes for sieve...`);
-    const primes: number[] = [];
-    for (let i = 3; primes.length < this.sieve; i += 2) {
-      if (prime(i)) {
-        primes.push(i);
-      }
-    }
-
     const workers = new Array(this.threads).fill(undefined).map((_) => {
-      const worker = parry(work);
-      worker.use("check", check);
-      worker.use("next", next);
-      worker.use("sieve", sieve);
-      worker.use("prime", prime);
+      const worker = parry(work, true);
+      worker.declare("generate", undefined);
       worker.use("log", log);
-      worker.use("error", error);
-      worker.declare("primes", primes);
       return worker;
     });
-    const promises: Array<Promise<[number, number, number, number[]]>> = [];
+
+    const promises: Array<Promise<[number, number, number, string]>> = [];
     log(`Starting mining using ${this.threads} workers`);
 
     for (let thread = 0; thread < this.threads; thread++) {
       log(`Fetching new task for thread ${thread}...`);
       const { uid, start_number, stop_number, workunit_result_uid } = await this
         .fetchTask();
+
       promises[thread] = workers[thread](
         thread,
         uid,
@@ -87,7 +88,14 @@ export class Miner {
       );
     }
 
-    while (true) {
+    let running = true;
+
+    readKeypress().next().then((_) => {
+      log("Detected keypress, finishing tasks and exiting...");
+      running = false;
+    });
+
+    while (running) {
       const [thread, ...old] = await Promise.race(promises);
       log(`Storing task ${old[1]} for thread ${thread}...`);
       await this.storeTask(old[0], old[1], old[2]);
@@ -103,11 +111,21 @@ export class Miner {
         stop_number,
       );
     }
+
+    const results = await Promise.all(promises);
+    for (const [thread, ...old] of results) {
+      log(`Storing task ${old[1]} for thread ${thread}...`);
+      await this.storeTask(old[0], old[1], old[2]);
+    }
+
+    for (const worker of workers) {
+      worker.close();
+    }
   }
 
   private async fetchTask(): Promise<Task> {
     const taskResponse = await this.#microgrid.getNewTask({ project: 1 });
-    if (taskResponse.message !== GetNewTaskMessage.GetNewTaskSuccessful) {
+    if (taskResponse.message !== GetNewTaskMessage.Successful) {
       error(`Could not fetch new task, exiting...`);
     }
 
@@ -117,7 +135,7 @@ export class Miner {
   private async storeTask(
     workunit_result_uid: number,
     uid: number,
-    result: number[],
+    result: string,
   ) {
     const storeResult = await this.#microgrid.taskStoreResult({
       version: 2,
@@ -125,14 +143,13 @@ export class Miner {
       result,
     });
 
-    if (storeResult !== TaskStoreResultMessage.TaskStoreResultSuccessful) {
+    if (storeResult !== TaskStoreResultMessage.Successful) {
       error(
         `Could not store result (${
           TaskStoreResultMessage[storeResult]
         }), exiting...`,
-        [uid.toString()],
+        [uid],
       );
-      Deno.exit(1);
     }
   }
 }

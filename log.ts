@@ -6,7 +6,7 @@ export function log(
   console.log(
     `[${
       typeof thread === "number" ? thread.toString().padStart(2, "0") : thread
-    }]${ids.map(id => `[${id}]`).join("")} ${text}`,
+    }]${ids.map((id) => `[${id}]`).join("")} ${text}`,
   );
 }
 

@@ -47,7 +47,7 @@ export interface GetNewTaskResult {
   task?: Task;
 }
 
-export interface TaskStoreResultOptions {
+export interface ResultOptions {
   version: number;
   workunit_result_uid: number;
   result:
@@ -56,60 +56,62 @@ export interface TaskStoreResultOptions {
       results: number[];
       validation_hash: number;
     }
-    | object;
+    | object
+    | string;
 }
 
-export interface TaskStoreResultResult {
+export interface ResultResult {
   result: string;
   message?: string;
 }
 
 export enum LoginMessage {
-  LoginFailed,
-  LoginFailedWrongToken,
-  LoginFailedInvalidCaptcha,
+  Failed,
+  FailedWrongToken,
+  FailedInvalidCaptcha,
+  Successful,
+  FailedRequest,
   LoginSuccessful,
-  LoginFailedRequest,
 }
 
 export enum RegisterMessage {
-  RegisterFailed,
-  RegisterFailedWrongToken,
-  RegisterFailedDisabled,
-  RegisterFailedPasswordMismatch,
-  RegisterFailedInvalidCaptcha,
-  RegisterFailedInvalidPassword,
-  RegisterFailedInvalidLogin,
-  RegisterLoginSuccessful,
-  RegisterSuccessful,
+  Failed,
+  FailedWrongToken,
+  FailedDisabled,
+  FailedPasswordMismatch,
+  FailedInvalidCaptcha,
+  FailedInvalidPassword,
+  FailedInvalidLogin,
+  LoginSuccessful,
+  Successful,
 }
 
 export enum LogoutMessage {
-  LogoutFailed,
-  LogoutFailedWrongToken,
-  LogoutSuccessful,
+  Failed,
+  FailedWrongToken,
+  Successful,
 }
 
 export enum UserChangeSettingsMessage {
-  UserChangeSettingsFailed,
-  UserChangeSettingsFailedWrongToken,
-  UserChangeSettingsFailedNewPasswordMismatch,
-  UserChangeSettingsFailedPasswordIncorrect,
-  UserChangeSettingsSuccessful,
+  Failed,
+  FailedWrongToken,
+  FailedNewPasswordMismatch,
+  FailedPasswordIncorrect,
+  Successful,
 }
 
 export enum GetNewTaskMessage {
-  GetNewTaskFailed,
-  GetNewTaskFailedWrongToken,
-  GetNewTaskFailedIncorrectBody,
-  GetNewTaskSuccessful,
+  Failed,
+  FailedWrongToken,
+  FailedIncorrectBody,
+  Successful,
 }
 
 export enum TaskStoreResultMessage {
-  TaskStoreResultFailed,
-  TaskStoreResultFailedWrongToken,
-  TaskStoreResultFailedWrongVersion,
-  TaskStoreResultSuccessful,
+  Failed,
+  FailedWrongToken,
+  FailedWrongVersion,
+  Successful,
 }
 
 export class Microgrid {
@@ -188,7 +190,7 @@ export class Microgrid {
 
     const response = await fetch(`${this.baseUrl}?${query}`, {
       method: "GET",
-      headers: headers,
+      headers,
     });
 
     const responseBody = await response.text();
@@ -213,7 +215,7 @@ export class Microgrid {
 
     const response = await fetch(`${this.baseUrl}?captcha`, {
       method: "GET",
-      headers: headers,
+      headers,
     });
 
     if (response.headers.get("content-type") === "image/png") {
@@ -226,12 +228,6 @@ export class Microgrid {
   public async projectScript(
     projectScript: number,
   ): Promise<string | undefined> {
-    const headers = new Headers();
-    headers.append(
-      "Cookie",
-      new Cookie("session_id", this.sessionId).toString(),
-    );
-
     const response = await fetch(
       `${this.baseUrl}?project_script=${projectScript.toString()}`,
       {
@@ -276,7 +272,7 @@ export class Microgrid {
     // const agent = createAgent(options.baseUrl);
     // const response = await agent.send({
     //   method: "POST",
-    //   headers: headers,
+    //   headers,
     //   body: body.toString(),
     //   path: "/"
     // });
@@ -291,7 +287,7 @@ export class Microgrid {
     console.log(response);
 
     if ((await response.text()) === "Wrong token") {
-      return LoginMessage.LoginFailedWrongToken;
+      return LoginMessage.FailedWrongToken;
     }
 
     if (response.headers.has("set-cookie")) {
@@ -303,14 +299,14 @@ export class Microgrid {
       if (cookie) {
         switch (cookie.value) {
           case "login_failed_invalid_captcha":
-            return LoginMessage.LoginFailedInvalidCaptcha;
+            return LoginMessage.FailedInvalidCaptcha;
           case "login_successful":
-            return LoginMessage.LoginSuccessful;
+            return LoginMessage.Successful;
         }
       }
     }
 
-    return LoginMessage.LoginFailed;
+    return LoginMessage.Failed;
   }
 
   public async register(options: RegisterOptions): Promise<RegisterMessage> {
@@ -333,12 +329,12 @@ export class Microgrid {
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: headers,
+      headers,
       body: body,
     });
 
     if ((await response.text()) === "Wrong token") {
-      return RegisterMessage.RegisterFailedWrongToken;
+      return RegisterMessage.FailedWrongToken;
     }
 
     if (response.headers.has("set-cookie")) {
@@ -350,24 +346,24 @@ export class Microgrid {
       if (cookie) {
         switch (cookie.value) {
           case "register_failed_invalid_captcha":
-            return RegisterMessage.RegisterFailedInvalidCaptcha;
+            return RegisterMessage.FailedInvalidCaptcha;
           case "register_failed_disabled":
-            return RegisterMessage.RegisterFailedDisabled;
+            return RegisterMessage.FailedDisabled;
           case "register_failed_password_mismatch":
-            return RegisterMessage.RegisterFailedPasswordMismatch;
+            return RegisterMessage.FailedPasswordMismatch;
           case "register_failed_invalid_password":
-            return RegisterMessage.RegisterFailedInvalidPassword;
+            return RegisterMessage.FailedInvalidPassword;
           case "register_failed_invalid_login":
-            return RegisterMessage.RegisterFailedInvalidLogin;
+            return RegisterMessage.FailedInvalidLogin;
           case "login_successful":
-            return RegisterMessage.RegisterLoginSuccessful;
+            return RegisterMessage.LoginSuccessful;
           case "register_successful":
-            return RegisterMessage.RegisterSuccessful;
+            return RegisterMessage.Successful;
         }
       }
     }
 
-    return RegisterMessage.RegisterFailed;
+    return RegisterMessage.Failed;
   }
 
   public async logout(): Promise<LogoutMessage> {
@@ -384,12 +380,12 @@ export class Microgrid {
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: headers,
+      headers,
       body: body,
     });
 
     if ((await response.text()) === "Wrong token") {
-      return LogoutMessage.LogoutFailedWrongToken;
+      return LogoutMessage.FailedWrongToken;
     }
 
     if (response.headers.has("set-cookie")) {
@@ -399,11 +395,11 @@ export class Microgrid {
       );
 
       if (cookie && cookie.value === "logout_successful") {
-        return LogoutMessage.LogoutSuccessful;
+        return LogoutMessage.Successful;
       }
     }
 
-    return LogoutMessage.LogoutFailed;
+    return LogoutMessage.Failed;
   }
 
   public async getNewTask(
@@ -423,7 +419,7 @@ export class Microgrid {
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: headers,
+      headers,
       body: body,
     });
 
@@ -431,45 +427,40 @@ export class Microgrid {
 
     if (responseBody === "Wrong token") {
       return {
-        message: GetNewTaskMessage.GetNewTaskFailedWrongToken,
+        message: GetNewTaskMessage.FailedWrongToken,
       };
     } else {
       try {
-        const json: object = JSON.parse(responseBody, (key, value) => {
+        const json: Task = JSON.parse(responseBody, (key, value) => {
           return isNaN(value) ? value : parseInt(value);
         });
 
         if (
-          (json as Task).workunit_result_uid !== undefined &&
-          (json as Task).uid !== undefined &&
-          (json as Task).project_uid !== undefined &&
-          (json as Task).start_number !== undefined &&
-          (json as Task).stop_number !== undefined &&
-          typeof (json as Task).workunit_result_uid === "number" &&
-          typeof (json as Task).uid === "number" &&
-          typeof (json as Task).project_uid === "number" &&
-          typeof (json as Task).start_number === "number" &&
-          typeof (json as Task).stop_number === "number"
+          typeof json.workunit_result_uid === "number" &&
+          typeof json.uid === "number" &&
+          typeof json.project_uid === "number" &&
+          typeof json.start_number === "number" &&
+          typeof json.stop_number === "number"
         ) {
           return {
-            message: GetNewTaskMessage.GetNewTaskSuccessful,
-            task: json as Task,
+            message: GetNewTaskMessage.Successful,
+            task: json,
           };
         }
       } catch {
         return {
-          message: GetNewTaskMessage.GetNewTaskFailedIncorrectBody,
+          message: GetNewTaskMessage.FailedIncorrectBody,
         };
       }
     }
 
     return {
-      message: GetNewTaskMessage.GetNewTaskFailed,
+      message: GetNewTaskMessage.Failed,
     };
   }
 
   public async taskStoreResult(
-    options: TaskStoreResultOptions,
+    options: ResultOptions,
   ): Promise<TaskStoreResultMessage> {
     const headers = new Headers();
     headers.append(
@@ -482,40 +473,42 @@ export class Microgrid {
       token: this.token,
       version: options.version.toString(),
       workunit_result_uid: options.workunit_result_uid.toString(),
-      result: JSON.stringify(options.result),
+      result: typeof options.result === "string"
+        ? options.result
+        : JSON.stringify(options.result),
     });
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: headers,
+      headers,
       body: body,
     });
 
     const responseBody = await response.text();
 
     if (responseBody === "Wrong token") {
-      return TaskStoreResultMessage.TaskStoreResultFailedWrongToken;
+      return TaskStoreResultMessage.FailedWrongToken;
     } else {
       try {
-        const json: object = JSON.parse(responseBody);
+        const json: ResultResult = JSON.parse(responseBody);
 
         if (
-          (json as TaskStoreResultResult).result !== undefined &&
-          typeof (json as TaskStoreResultResult).result === "string"
+          json.result !== undefined &&
+          typeof json.result === "string"
         ) {
-          switch ((json as TaskStoreResultResult).result) {
+          switch (json.result) {
             case "fail":
-              return TaskStoreResultMessage.TaskStoreResultFailedWrongVersion;
+              return TaskStoreResultMessage.FailedWrongVersion;
             case "ok":
-              return TaskStoreResultMessage.TaskStoreResultSuccessful;
+              return TaskStoreResultMessage.Successful;
           }
         }
       } catch {
-        return TaskStoreResultMessage.TaskStoreResultFailed;
+        return TaskStoreResultMessage.Failed;
       }
     }
 
-    return TaskStoreResultMessage.TaskStoreResultFailed;
+    return TaskStoreResultMessage.Failed;
   }
 
   public async userChangeSettings(
@@ -539,12 +532,12 @@ export class Microgrid {
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: headers,
+      headers,
       body: body,
     });
 
     if ((await response.text()) === "Wrong token") {
-      return UserChangeSettingsMessage.UserChangeSettingsFailedWrongToken;
+      return UserChangeSettingsMessage.FailedWrongToken;
     }
 
     if (response.headers.has("set-cookie")) {
@@ -557,16 +550,16 @@ export class Microgrid {
         switch (cookie.value) {
           case "user_change_settings_failed_new_password_mismatch":
             return UserChangeSettingsMessage
-              .UserChangeSettingsFailedNewPasswordMismatch;
+              .FailedNewPasswordMismatch;
           case "user_change_settings_failed_password_incorrect":
             return UserChangeSettingsMessage
-              .UserChangeSettingsFailedPasswordIncorrect;
+              .FailedPasswordIncorrect;
           case "user_change_settings_successful":
-            return UserChangeSettingsMessage.UserChangeSettingsSuccessful;
+            return UserChangeSettingsMessage.Successful;
         }
       }
     }
 
-    return UserChangeSettingsMessage.UserChangeSettingsFailed;
+    return UserChangeSettingsMessage.Failed;
   }
 }

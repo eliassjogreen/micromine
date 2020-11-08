@@ -14,7 +14,7 @@ log("| | | | | | | (__| | | (_) | | | | | | | | | |  __/");
 log("|_| |_| |_|_|\\___|_|  \\___/|_| |_| |_|_|_| |_|\\___|");
 
 if (await exists("./session.json")) {
-  console.log("Found session.json");
+  log("Found session.json");
 
   const session = JSON.parse(await Deno.readTextFile("./session.json")) as {
     sessionId: string;
