@@ -1,5 +1,5 @@
 import { Cookie } from "./cookie.ts";
-import { deferred } from "./deps.ts";
+import { deferred, createAgent } from "./deps.ts";
 
 export interface MicrogridOptions {
   baseUrl: string;
@@ -71,7 +71,6 @@ export enum LoginMessage {
   FailedInvalidCaptcha,
   Successful,
   FailedRequest,
-  LoginSuccessful,
 }
 
 export enum RegisterMessage {
@@ -116,6 +115,7 @@ export enum TaskStoreResultMessage {
 
 export class Microgrid {
   public readonly baseUrl: string;
+  public readonly corsProxy: string;
   public readonly ready: Promise<void>;
 
   public get sessionId(): string {
@@ -133,8 +133,10 @@ export class Microgrid {
     sessionId?: string,
     token?: string,
     baseUrl: string = "https://microgrid.arikado.ru/",
+    corsProxy: string = "https://cors-anywhere.herokuapp.com/"
   ) {
     this.baseUrl = baseUrl;
+    this.corsProxy = corsProxy;
     let ready = deferred();
     this.ready = ready as Promise<void>;
 
@@ -252,14 +254,6 @@ export class Microgrid {
       "Content-Type",
       "application/x-www-form-urlencoded; charset=UTF-8",
     );
-    headers.append(
-      "Origin",
-      this.baseUrl,
-    );
-    headers.append(
-      "Referer",
-      this.baseUrl,
-    );
 
     const body = new URLSearchParams({
       action: "login",
@@ -269,22 +263,21 @@ export class Microgrid {
       captcha_code: options.captcha,
     }).toString();
 
-    // const agent = createAgent(options.baseUrl);
-    // const response = await agent.send({
-    //   method: "POST",
-    //   headers,
-    //   body: body.toString(),
-    //   path: "/"
-    // });
-
-    // TODO: fix login, redirect fucks this up somehow and servest createAgent is broken
-    const response = await fetch(`${this.baseUrl}#login`, {
+    // This really sucks, but it works...
+    const agent = createAgent(this.baseUrl);
+    const response = await agent.send({
       method: "POST",
       headers,
       body,
+      path: "/"
     });
 
-    console.log(response);
+    // TODO: fix login, cors is a bitch
+    // const response = await fetch(`${this.baseUrl}#login`, {
+    //  method: "POST",
+    //  headers,
+    //  body,
+    // });
 
     if ((await response.text()) === "Wrong token") {
       return LoginMessage.FailedWrongToken;
@@ -330,7 +323,7 @@ export class Microgrid {
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers,
-      body: body,
+      body,
     });
 
     if ((await response.text()) === "Wrong token") {
@@ -381,7 +374,7 @@ export class Microgrid {
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers,
-      body: body,
+      body,
     });
 
     if ((await response.text()) === "Wrong token") {
@@ -420,7 +413,7 @@ export class Microgrid {
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers,
-      body: body,
+      body,
     });
 
     const responseBody = await response.text();
@@ -481,7 +474,7 @@ export class Microgrid {
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers,
-      body: body,
+      body,
     });
 
     const responseBody = await response.text();
@@ -533,7 +526,7 @@ export class Microgrid {
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers,
-      body: body,
+      body,
     });
 
     if ((await response.text()) === "Wrong token") {

@@ -32,12 +32,12 @@ if (await exists("./session.json")) {
   log("Session id : " + grid.sessionId);
   log("Token      : " + grid.token);
 
-  const login = prompt("Enter username: ");
+  const login = prompt("[--] Enter username: ");
   if (!login) {
     error("Expected username");
   }
 
-  const password = prompt("Enter password: ");
+  const password = prompt("[--] Enter password: ");
   if (!password) {
     error("Expected password");
   }
@@ -50,7 +50,7 @@ if (await exists("./session.json")) {
 
   log("Downloaded captcha, writing to captcha.png");
   await Deno.writeFile("captcha.png", captchaImage);
-  const captcha = prompt("Enter captcha: ");
+  const captcha = prompt("[--] Enter captcha: ");
   if (!captcha) {
     error("Expected captcha");
   }
@@ -60,17 +60,22 @@ if (await exists("./session.json")) {
 
   log(`Login result: ${LoginMessage[loginResult]}`);
 
-  if (loginResult !== LoginMessage.LoginSuccessful) {
+  if (loginResult !== LoginMessage.Successful) {
     error("Login failed, exiting...");
   } else {
-    log("Login successful, saving session to session.json");
-    await Deno.writeTextFile(
-      "./session.json",
-      JSON.stringify({
-        id: grid.sessionId,
-        token: grid.token,
-      }),
-    );
+    log("Login successful");
+    const answer = prompt("[--] Save session? (y/n): ")?.toLowerCase();
+
+    if (answer?.startsWith("y")) {
+      log("Saving session to session.json")
+      await Deno.writeTextFile(
+        "./session.json",
+        JSON.stringify({
+          id: grid.sessionId,
+          token: grid.token,
+        }),
+      );
+    }
   }
 }
 
