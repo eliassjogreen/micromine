@@ -24,13 +24,12 @@ export async function work(
   if (generate === undefined) {
     log(
       `Importing twinprime plugin...`,
-      undefined,
+      [task.uid],
       thread,
     );
     try {
-      generate =
-        (await import("https://deno.land/x/twinprime@0.1.2/mod.ts"))
-          .generateRaw;
+      generate = (await import("https://deno.land/x/twinprime@0.1.2/mod.ts"))
+        .generateRaw;
     } catch (e) {
       console.log(e);
     }
@@ -61,7 +60,6 @@ export async function work(
 
 export class Miner {
   public readonly threads;
-  public readonly overhead;
 
   #running = false;
   #microgrid: Microgrid;
@@ -69,16 +67,14 @@ export class Miner {
   constructor(
     microgrid: Microgrid,
     threads = Deno.systemCpuInfo().cores ?? 4,
-    overhead = threads,
   ) {
     this.threads = threads;
-    this.overhead = overhead;
     this.#microgrid = microgrid;
   }
 
   public async mine() {
     this.#running = true;
-    
+
     const workers = new Array(this.threads).fill(undefined).map((_) => {
       const worker = parry(work, true);
       worker.declare("generate", undefined);
@@ -86,45 +82,34 @@ export class Miner {
       return worker;
     });
 
-    const tasks = this.tasks();
     const promises: Array<Promise<WorkResult>> = [];
     log(`Starting mining using ${this.threads} workers`);
-
-    for (let thread = 0; thread < this.threads; thread++) {
-      log(`Fetching new task for thread ${thread}...`);
-      const next = await tasks.next();
-      if (!next.done) {
-        const task = next.value;
-
-        promises[thread] = workers[thread](
-          thread,
-          task,
-        );
-      }
-    }
 
     readKeypress().next().then((_) => {
       log("Detected keypress, finishing tasks and exiting...");
       this.#running = false;
     });
 
-    while (true) {
-      const { thread, task, result } = await Promise.race(promises);
-      
-      const next = await tasks.next();
-      if (!next.done) {
+    while (this.#running) {
+      const results = await Promise.all(promises);
+      const storePromises = [];
+      for (const { thread, task, result } of results) {
+        log(`Storing task for thread ${thread}...`, [task.uid]);
+        storePromises.push(this.storeTask(task, result));
+      }
+
+      const batch = await this.getBatch();
+      let thread = 0;
+      for (const task of batch) {
         promises[thread] = workers[thread](
           thread,
-          next.value,
+          task,
         );
+
+        thread++;
       }
 
-      log(`Storing task ${task.uid} for thread ${thread}...`);
-      await this.storeTask(task, result);
-
-      if (next.done) {
-        break;
-      }
+      await Promise.all(storePromises);
     }
 
     const results = await Promise.all(promises);
@@ -138,15 +123,13 @@ export class Miner {
     }
   }
 
-  private async *tasks() {
-    const queue: Array<Task> = [];
-    const promises: Array<Promise<GetNewTaskResult>> = [];
+  private async getBatch(size: number = this.threads): Promise<Task[]> {
+    log(`Getting batch of ${size} tasks`);
 
-    log(
-      `Initializing by loading ${this.threads + this.overhead} tasks to queue`,
-    );
+    const promises = [];
+    const batch = [];
 
-    for (let i = 0; i < this.threads + this.overhead; i++) {
+    for (let i = 0; i < this.threads; i++) {
       promises.push(this.#microgrid.getNewTask({ project: 1 }));
     }
 
@@ -159,26 +142,10 @@ export class Miner {
         );
       }
 
-      queue.push(response.task!);
+      batch.push(response.task!);
     }
 
-    while (queue.length > 0) {
-      yield queue.pop()!;
-
-      if (this.#running) {
-        const response = await this.#microgrid.getNewTask({ project: 1 });
-
-        if (response.message !== GetNewTaskMessage.Successful) {
-          error(
-            `Could not fetch new task, exiting... (${
-              GetNewTaskMessage[response.message]
-            })`,
-          );
-        }
-  
-        queue.push(response.task!);
-      }
-    }
+    return batch;
   }
 
   private async storeTask(
