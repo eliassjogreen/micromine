@@ -13,6 +13,7 @@ interface WorkResult {
   thread: number;
   task: Task;
   result: string;
+  time: number;
 }
 
 declare let generate: ((start: bigint, stop: bigint) => string) | undefined;
@@ -35,26 +36,25 @@ export async function work(
     }
   }
 
-  log(
-    `Generating sequence: ${task.start_number}..${task.stop_number}`,
-    [task.uid],
-    thread,
-  );
+  // log(
+  //   `Generating sequence: ${task.start_number}..${task.stop_number}`,
+  //   [task.uid],
+  //   thread,
+  // );
   const startTime = performance.now();
   const result = generate!(BigInt(task.start_number), BigInt(task.stop_number));
   const endTime = performance.now();
-  log(
-    `Finished sequence: ${task.start_number}..${task.stop_number} in ${
-      ((endTime - startTime) / 1e3).toFixed(0)
-    } sec`,
-    [task.uid],
-    thread,
-  );
+  // log(
+  //   `Finished sequence: ${task.start_number}..${task.stop_number} in ${(endTime - startTime).toFixed(0)} ms`,
+  //   [task.uid],
+  //   thread,
+  // );
 
   return {
     thread,
     task,
     result,
+    time: endTime - startTime,
   };
 }
 
@@ -90,13 +90,10 @@ export class Miner {
       this.#running = false;
     });
 
+    const finishers = [];
+
     while (this.#running) {
-      const results = await Promise.all(promises);
-      const storePromises = [];
-      for (const { thread, task, result } of results) {
-        log(`Storing task for thread ${thread}...`, [task.uid]);
-        storePromises.push(this.storeTask(task, result));
-      }
+      finishers.push(this.finishWork(promises));
 
       const batch = await this.getBatch();
       let thread = 0;
@@ -108,18 +105,30 @@ export class Miner {
 
         thread++;
       }
-
-      await Promise.all(storePromises);
     }
 
-    const results = await Promise.all(promises);
-    for (const { thread, task, result } of results) {
-      log(`Storing task ${task.uid} for thread ${thread}...`);
-      await this.storeTask(task, result);
-    }
+    finishers.push(this.finishWork(promises));
+    await Promise.all(finishers);
 
     for (const worker of workers) {
       worker.close();
+    }
+  }
+
+  private async finishWork(promises: Promise<WorkResult>[]): Promise<void> {
+    const results = await Promise.all(promises);
+
+    if (results.length > 0) {
+      log(
+        `Finished ${results.length} tasks in ~${(results.map(({ time }) => time)
+          .reduce((a, b) => a + b) / results.length).toFixed()} ms`,
+      );
+      log(
+        `Storing tasks: ${results.map(({ task }) => task.uid).join(", ")}`,
+      );
+      for (const { thread, task, result } of results) {
+        await this.storeTask(task, result);
+      }
     }
   }
 
