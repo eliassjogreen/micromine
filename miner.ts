@@ -24,8 +24,8 @@ export async function work(
 ): Promise<WorkResult> {
   if (generate === undefined) {
     log(
-      `Importing twinprime plugin...`,
-      [task.uid],
+      `Initializing worker...`,
+      undefined,
       thread,
     );
     try {
@@ -60,6 +60,7 @@ export async function work(
 
 export class Miner {
   public readonly threads;
+  public readonly batches;
 
   #running = false;
   #microgrid: Microgrid;
@@ -67,8 +68,10 @@ export class Miner {
   constructor(
     microgrid: Microgrid,
     threads = Deno.systemCpuInfo().cores ?? 4,
+    batches = 4,
   ) {
     this.threads = threads;
+    this.batches = batches;
     this.#microgrid = microgrid;
   }
 
@@ -93,18 +96,21 @@ export class Miner {
     const finishers = [];
 
     while (this.#running) {
-      finishers.push(this.finishWork(promises));
+      await Promise.all([
+        this.finishWork(promises),
+        this.getBatch().then((batch) => {
+          log(`Calculating ${batch.length} tasks`, [batch[0].uid]);
+          let thread = 0;
+          for (const task of batch) {
+            promises[thread] = workers[thread](
+              thread,
+              task,
+            );
 
-      const batch = await this.getBatch();
-      let thread = 0;
-      for (const task of batch) {
-        promises[thread] = workers[thread](
-          thread,
-          task,
-        );
-
-        thread++;
-      }
+            thread++;
+          }
+        }),
+      ]);
     }
 
     finishers.push(this.finishWork(promises));
@@ -117,24 +123,27 @@ export class Miner {
 
   private async finishWork(promises: Promise<WorkResult>[]): Promise<void> {
     const results = await Promise.all(promises);
+    const storers: Promise<void>[] = [];
 
     if (results.length > 0) {
       log(
-        `Finished ${results.length} tasks in ~${(results.map(({ time }) => time)
-          .reduce((a, b) => a + b) / results.length).toFixed()} ms`,
+        `Finished ${results.length} tasks in ~${
+          (results.map(({ time }) => time)
+            .reduce((a, b) => a + b) / results.length).toFixed()
+        } ms`,
+        [results[0].task.uid]
       );
-      log(
-        `Storing tasks: ${results.map(({ task }) => task.uid).join(", ")}`,
-      );
+      log(`Storing tasks`, [results[0].task.uid]);
+
       for (const { thread, task, result } of results) {
-        await this.storeTask(task, result);
+        storers.push(this.storeTask(task, result));
       }
     }
+
+    Promise.all(storers);
   }
 
   private async getBatch(size: number = this.threads): Promise<Task[]> {
-    log(`Getting batch of ${size} tasks`);
-
     const promises = [];
     const batch = [];
 
