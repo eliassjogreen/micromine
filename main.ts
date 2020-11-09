@@ -16,12 +16,12 @@ log("|_| |_| |_|_|\\___|_|  \\___/|_| |_| |_|_|_| |_|\\___|");
 if (await exists("./session.json")) {
   log("Found session.json");
 
-  const session = JSON.parse(await Deno.readTextFile("./session.json")) as {
-    sessionId: string;
-    token: string;
-  };
-
-  grid = new Microgrid(session.sessionId, session.token);
+  const session = JSON.parse(await Deno.readTextFile("./session.json"));
+  grid = new Microgrid(session.id, session.token);
+  
+  log("Restored session");
+  log("Session id : " + grid.sessionId);
+  log("Token      : " + grid.token);
 } else {
   log("Didn't find session.json");
 
