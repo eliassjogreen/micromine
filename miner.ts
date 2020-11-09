@@ -77,6 +77,8 @@ export class Miner {
   }
 
   public async mine() {
+    this.#running = true;
+    
     const workers = new Array(this.threads).fill(undefined).map((_) => {
       const worker = parry(work, true);
       worker.declare("generate", undefined);
@@ -108,8 +110,6 @@ export class Miner {
 
     while (true) {
       const { thread, task, result } = await Promise.race(promises);
-      log(`Storing task ${task.uid} for thread ${thread}...`);
-      await this.storeTask(task, result);
       
       const next = await tasks.next();
       if (!next.done) {
@@ -117,7 +117,12 @@ export class Miner {
           thread,
           next.value,
         );
-      } else {
+      }
+
+      log(`Storing task ${task.uid} for thread ${thread}...`);
+      await this.storeTask(task, result);
+
+      if (next.done) {
         break;
       }
     }
