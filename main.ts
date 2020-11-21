@@ -1,8 +1,19 @@
-import { exists } from "./deps.ts";
+import { exists, parse } from "./deps.ts";
 
 import { LoginMessage, Microgrid } from "./microgrid.ts";
 import { Miner } from "./miner.ts";
 import { error, log } from "./log.ts";
+
+const args = parse(Deno.args, {
+  alias: {
+    s: "session",
+    t: "threads",
+    b: "batches",
+  },
+  default: {
+    session: "./session.json",
+  },
+});
 
 let grid;
 
@@ -13,24 +24,24 @@ log("| '_ ` _ \\| |/ __| '__/ _ \\| '_ ` _ \\| | '_ \\ / _ \\");
 log("| | | | | | | (__| | | (_) | | | | | | | | | |  __/");
 log("|_| |_| |_|_|\\___|_|  \\___/|_| |_| |_|_|_| |_|\\___|");
 
-if (await exists("./session.json")) {
-  log("Found session.json");
+if (await exists(args.session)) {
+  log(`Found session (${args.session})`);
 
-  const session = JSON.parse(await Deno.readTextFile("./session.json"));
+  const session = JSON.parse(await Deno.readTextFile(args.session));
   grid = new Microgrid(session.id, session.token);
-  
-  log("Restored session");
-  log("Session id : " + grid.sessionId);
-  log("Token      : " + grid.token);
+
+  log(`Restored session (${args.session})`);
+  log(`Session id : ${grid.sessionId}`);
+  log(`Token      : ${grid.token}`);
 } else {
-  log("Didn't find session.json");
+  log(`Didn't find session (${args.session})`);
 
   grid = new Microgrid();
   await grid.ready;
 
   log("Initialized new session");
-  log("Session id : " + grid.sessionId);
-  log("Token      : " + grid.token);
+  log(`Session id : ${grid.sessionId}`);
+  log(`Token      : ${grid.token}`);
 
   const login = prompt("[--] Enter username: ");
   if (!login) {
@@ -67,9 +78,9 @@ if (await exists("./session.json")) {
     const answer = prompt("[--] Save session? (y/n): ")?.toLowerCase();
 
     if (answer?.startsWith("y")) {
-      log("Saving session to session.json")
+      log(`Saving session to ${args.session}`);
       await Deno.writeTextFile(
-        "./session.json",
+        args.session,
         JSON.stringify({
           id: grid.sessionId,
           token: grid.token,
@@ -79,5 +90,5 @@ if (await exists("./session.json")) {
   }
 }
 
-const miner = new Miner(grid);
+const miner = new Miner(grid, args.threads, args.batches);
 await miner.mine();
