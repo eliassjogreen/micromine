@@ -1,4 +1,4 @@
-import { exists, parse, log } from "./deps.ts";
+import { exists, LevelName, log, parse } from "./deps.ts";
 
 import { LoginMessage, Microgrid } from "./src/microgrid.ts";
 import { mine } from "./src/miner.ts";
@@ -93,4 +93,4 @@ if (await exists(args.session)) {
   }
 }
 
-await mine(microgrid);
+await mine(microgrid, args.threads);
