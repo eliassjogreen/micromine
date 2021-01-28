@@ -1,5 +1,5 @@
 import { Cookie } from "./cookie.ts";
-import { deferred, createAgent } from "./deps.ts";
+import { deferred } from "../deps.ts";
 
 export interface MicrogridOptions {
   baseUrl: string;
@@ -132,7 +132,7 @@ export class Microgrid {
   constructor(
     sessionId?: string,
     token?: string,
-    baseUrl: string = "https://microgrid.arikado.ru/"
+    baseUrl: string = "https://microgrid.arikado.ru/",
   ) {
     this.baseUrl = baseUrl;
     let ready = deferred();
@@ -261,21 +261,12 @@ export class Microgrid {
       captcha_code: options.captcha,
     }).toString();
 
-    // This really sucks, but it works...
-    const agent = createAgent(this.baseUrl);
-    const response = await agent.send({
+    const response = await fetch(`${this.baseUrl}#login`, {
       method: "POST",
+      redirect: "manual",
       headers,
       body,
-      path: "/"
     });
-
-    // TODO: fix login, cors is a bitch
-    // const response = await fetch(`${this.baseUrl}#login`, {
-    //  method: "POST",
-    //  headers,
-    //  body,
-    // });
 
     if ((await response.text()) === "Wrong token") {
       return LoginMessage.FailedWrongToken;
@@ -422,9 +413,10 @@ export class Microgrid {
       };
     } else {
       try {
-        const json: Task = JSON.parse(responseBody, (key, value) => {
-          return isNaN(value) ? value : parseInt(value);
-        });
+        const json: Task = JSON.parse(
+          responseBody,
+          (key, value) => isNaN(value) ? value : parseInt(value),
+        );
 
         if (
           typeof json.workunit_result_uid === "number" &&

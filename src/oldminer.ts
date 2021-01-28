@@ -1,4 +1,4 @@
-import { parry, readKeypress } from "./deps.ts";
+import { log, parry } from "../deps.ts";
 
 import {
   GetNewTaskMessage,
@@ -7,7 +7,7 @@ import {
   Task,
   TaskStoreResultMessage,
 } from "./microgrid.ts";
-import { error, log } from "./log.ts";
+import { awaitKeypress } from "./util.ts";
 
 interface WorkResult {
   thread: number;
@@ -16,51 +16,53 @@ interface WorkResult {
   time: number;
 }
 
-declare let generate: ((start: bigint, stop: bigint) => string) | undefined;
+declare let range:
+  | ((start: bigint, stop: bigint) => BigUint64Array | undefined)
+  | undefined;
 
 export async function work(
   thread: number,
   task: Task,
 ): Promise<WorkResult> {
-  if (generate === undefined) {
-    log(
-      `Initializing worker...`,
-      undefined,
-      thread,
-    );
+  if (range === undefined) {
+    console.log(`Initializing worker ${thread}...`);
+
     try {
-      generate = (await import("https://deno.land/x/twinprime@0.1.2/mod.ts"))
-        .generateRaw;
+      range = (await import("https://deno.land/x/twinprime@0.1.5/mod.ts")).range;
     } catch (e) {
       console.log(e);
+      Deno.exit(1);
     }
   }
 
-  // log(
-  //   `Generating sequence: ${task.start_number}..${task.stop_number}`,
-  //   [task.uid],
-  //   thread,
-  // );
+  console.log(
+    `Thread ${thread} generating range: ${task.start_number}..${task.stop_number} for task ${task.uid}`,
+  );
   const startTime = performance.now();
-  const result = generate!(BigInt(task.start_number), BigInt(task.stop_number));
+  const result = range(BigInt(task.start_number), BigInt(task.stop_number));
   const endTime = performance.now();
-  // log(
-  //   `Finished sequence: ${task.start_number}..${task.stop_number} in ${(endTime - startTime).toFixed(0)} ms`,
-  //   [task.uid],
-  //   thread,
-  // );
+  console.log(
+    `Thread ${thread} finished range: ${task.start_number}..${task.stop_number} in ${
+      (endTime - startTime).toFixed(0)
+    } ms, found ${(result ?? []).length}*2 twins`,
+  );
+
+  if (result === undefined) {
+    throw new Error(
+      `Failed to generate range ${task.start_number}..${task.stop_number}`,
+    );
+  }
 
   return {
     thread,
     task,
-    result,
+    result: `[${result.join(",")}]`,
     time: endTime - startTime,
   };
 }
 
 export class Miner {
   public readonly threads;
-  public readonly batches;
 
   #running = false;
   #microgrid: Microgrid;
@@ -68,28 +70,25 @@ export class Miner {
   constructor(
     microgrid: Microgrid,
     threads = Deno.systemCpuInfo().cores ?? 4,
-    batches = 4,
   ) {
     this.threads = threads;
-    this.batches = batches;
     this.#microgrid = microgrid;
   }
 
   public async mine() {
     this.#running = true;
 
-    const workers = new Array(this.threads).fill(undefined).map((_) => {
+    const workers = new Array(this.threads).fill(undefined).map(() => {
       const worker = parry(work, true);
-      worker.declare("generate", undefined);
-      worker.use("log", log);
+      worker.declare("range", undefined);
       return worker;
     });
 
     const promises: Array<Promise<WorkResult>> = [];
-    log(`Starting mining using ${this.threads} workers`);
+    log.info(`Starting mining using ${this.threads} workers`);
 
-    readKeypress().next().then((_) => {
-      log("Detected keypress, finishing tasks and exiting...");
+    awaitKeypress().then(() => {
+      log.info("Detected keypress, finishing tasks and exiting...");
       this.#running = false;
     });
 
@@ -99,7 +98,7 @@ export class Miner {
       await Promise.all([
         this.finishWork(promises),
         this.getBatch().then((batch) => {
-          log(`Calculating ${batch.length} tasks`, [batch[0].uid]);
+          log.info(`Calculating ${batch.length} tasks`, [batch[0].uid]);
           let thread = 0;
           for (const task of batch) {
             promises[thread] = workers[thread](
@@ -126,14 +125,14 @@ export class Miner {
     const storers: Promise<void>[] = [];
 
     if (results.length > 0) {
-      log(
+      log.info(
         `Finished ${results.length} tasks in ~${
           (results.map(({ time }) => time)
             .reduce((a, b) => a + b) / results.length).toFixed()
         } ms`,
-        [results[0].task.uid]
+        [results[0].task.uid],
       );
-      log(`Storing tasks`, [results[0].task.uid]);
+      log.info(`Storing tasks`, [results[0].task.uid]);
 
       for (const { thread, task, result } of results) {
         storers.push(this.storeTask(task, result));
@@ -143,7 +142,7 @@ export class Miner {
     Promise.all(storers);
   }
 
-  private async getBatch(size: number = this.threads): Promise<Task[]> {
+  private async getBatch(): Promise<Task[]> {
     const promises = [];
     const batch = [];
 
@@ -153,7 +152,7 @@ export class Miner {
 
     for (const response of await Promise.all(promises)) {
       if (response.message !== GetNewTaskMessage.Successful) {
-        error(
+        log.error(
           `Could not fetch new task, exiting... (${
             GetNewTaskMessage[response.message]
           })`,
@@ -177,11 +176,10 @@ export class Miner {
     });
 
     if (storeResult !== TaskStoreResultMessage.Successful) {
-      error(
-        `Could not store result (${
+      log.error(
+        `Could not store result for ${task.uid} (${
           TaskStoreResultMessage[storeResult]
         }), exiting...`,
-        [task.uid],
       );
     }
   }
