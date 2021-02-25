@@ -1,4 +1,4 @@
-import { exists, LevelName, log, parse } from "./deps.ts";
+import { exists, log, parse } from "./deps.ts";
 
 import { LoginMessage, Microgrid } from "./src/microgrid.ts";
 import { mine } from "./src/miner.ts";
@@ -7,7 +7,8 @@ const args = parse(Deno.args, {
   alias: {
     session: "s",
     threads: "t",
-    batches: "b",
+    attempts: "a",
+    cooldown: "c",
   },
   default: {
     session: "./session.json",
@@ -93,4 +94,4 @@ if (await exists(args.session)) {
   }
 }
 
-await mine(microgrid, args.threads);
+await mine(microgrid, args.threads, args.attempts, args.cooldown);
